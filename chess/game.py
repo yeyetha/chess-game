@@ -2,7 +2,10 @@ import pygame
 import chess
 from ai_player import ai_move
 from network import NetworkServer, NetworkClient
-
+import socket
+import threading
+import queue
+WIDTH, HEIGHT = 640, 720
 def draw_board(screen, board, images, selected_square=None):
     colors = [(235, 236, 208), (119, 149, 86)]
     highlight = (186, 202, 68)
@@ -37,7 +40,7 @@ def save_game(board):
     with open("save_game.txt", "w") as f:
         f.write(board.fen())
 
-def load_save_game():
+def load_game():
     with open("save_game.txt", "r") as f:
         return chess.Board(f.read())
 
@@ -70,19 +73,20 @@ def pause_menu(screen):
                         return "restart"
 
 def display_message(screen, message):
-    font = pygame.font.SysFont("Arial", 40, bold=True)
+    font = pygame.font.SysFont("Arial", 36, bold=True)
     text = font.render(message, True, (255, 0, 0))
-    screen.blit(text, (320 - text.get_width() // 2, 10))
+    screen.blit(text, (320 - text.get_width() // 2, 660))
 
-def start_game(vs_ai=True, load_game=False, network=False, ai_level="medium"):
+def start_game(vs_ai=True, load_saved_game=False, network=False, ai_level="medium"):
     pygame.init()
-    screen = pygame.display.set_mode((640, 640))
+    screen = pygame.display.set_mode((640, 720))
     pygame.display.set_caption("Chess Game")
     clock = pygame.time.Clock()
 
-    board = load_save_game() if load_game else chess.Board()
+    board = load_game() if load_saved_game else chess.Board()
     images = load_images()
     selected_square = None
+    status_message = ""
 
     if network == "host":
         net = NetworkServer()
@@ -95,19 +99,31 @@ def start_game(vs_ai=True, load_game=False, network=False, ai_level="medium"):
         player_color = chess.WHITE
 
     running = True
+    connection_lost = False
+    move_queue = queue.Queue()
+
+    def receive_loop():
+        while True:
+            try:
+                move = net.receive_move()
+                move_queue.put(move)
+            except (ConnectionResetError, socket.error):
+                move_queue.put("__DISCONNECT__")
+                break
+
+    if net:
+        threading.Thread(target=receive_loop, daemon=True).start()
+
     while running:
         draw_board(screen, board, images, selected_square)
+        pygame.draw.rect(screen, (30, 30, 30), pygame.Rect(0, 640, WIDTH, 80))
 
-        if board.is_check():
-            display_message(screen, "Check!")
-        if board.is_checkmate():
-            display_message(screen, "Checkmate! Press ESC")
-        elif board.is_stalemate():
-            display_message(screen, "Stalemate! Press ESC")
+        if status_message:
+            display_message(screen, status_message)
 
         pygame.display.flip()
 
-        if board.is_game_over():
+        if board.is_game_over() or connection_lost:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -121,12 +137,30 @@ def start_game(vs_ai=True, load_game=False, network=False, ai_level="medium"):
             move = ai_move(board, level=ai_level)
             board.push(move)
             save_game(board)
+            selected_square = None
+            status_message = "Check!" if board.is_check() else ""
+            if board.is_checkmate():
+                status_message = "Checkmate!"
+            elif board.is_stalemate():
+                status_message = "Stalemate!"
             continue
 
-        if network and board.turn != player_color:
-            move = net.receive_move()
-            if move:
-                board.push(chess.Move.from_uci(move))
+        if net and board.turn != player_color:
+            if not move_queue.empty():
+                move = move_queue.get()
+                if move == "__DISCONNECT__":
+                    connection_lost = True
+                    status_message = "Disconnect!"
+                else:
+                    board.push(chess.Move.from_uci(move))
+                    selected_square = None
+                    status_message = "Check!" if board.is_check() else ""
+                    if board.is_checkmate():
+                        status_message = "Checkmate!"
+                    elif board.is_stalemate():
+                        status_message = "Stalemate!"
+            else:
+                pygame.time.delay(10)
             continue
 
         for event in pygame.event.get():
@@ -141,9 +175,12 @@ def start_game(vs_ai=True, load_game=False, network=False, ai_level="medium"):
                     elif action == "restart":
                         board = chess.Board()
                         selected_square = None
+                        status_message = ""
                         continue
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 x, y = pygame.mouse.get_pos()
+                if y > 640:
+                    continue
                 col, row = x // 80, 7 - y // 80
                 square = row * 8 + col
                 if selected_square is None:
@@ -154,7 +191,17 @@ def start_game(vs_ai=True, load_game=False, network=False, ai_level="medium"):
                     if move in board.legal_moves:
                         board.push(move)
                         if net:
-                            net.send_move(move.uci())
+                            try:
+                                net.send_move(move.uci())
+                            except (ConnectionResetError, socket.error):
+                                connection_lost = True
+                                status_message = "Disconnect!"
                         save_game(board)
+                        status_message = "Check!" if board.is_check() else ""
+                        if board.is_checkmate():
+                            status_message = "Checkmate!"
+                        elif board.is_stalemate():
+                            status_message = "Stalemate!"
+                        
                     selected_square = None
         clock.tick(30)

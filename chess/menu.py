@@ -4,7 +4,7 @@ import os
 
 def main_menu():
     pygame.init()
-    screen = pygame.display.set_mode((640, 640))
+    screen = pygame.display.set_mode((640, 720))  # Increased height for spacing
     pygame.display.set_caption("Chess Menu")
     font = pygame.font.SysFont("Arial", 36)
     clock = pygame.time.Clock()
@@ -23,7 +23,7 @@ def main_menu():
                 label += f" ({ai_levels[ai_level]})"
             color = (255, 255, 255) if i == selected else (180, 180, 180)
             text = font.render(label, True, color)
-            screen.blit(text, (80, 120 + i * 60))
+            screen.blit(text, (80, 100 + i * 60))  # Adjusted vertical offset
 
         pygame.display.flip()
 
@@ -37,14 +37,14 @@ def main_menu():
                     selected = (selected + 1) % len(options)
                 elif event.key == pygame.K_RETURN:
                     if selected == 0:
-                        start_game(vs_ai=True, load_game=False, ai_level=ai_levels[ai_level])
+                        start_game(vs_ai=True, load_saved_game=False, ai_level=ai_levels[ai_level])
                     elif selected == 1:
                         if os.path.exists("save_game.txt"):
-                            start_game(vs_ai=True, load_game=True, ai_level=ai_levels[ai_level])
+                            start_game(vs_ai=True, load_saved_game=True, ai_level=ai_levels[ai_level])
                     elif selected == 2:
-                        start_game(vs_ai=False, load_game=False, network="host")
+                        start_game(vs_ai=False, load_saved_game=False, network="host")
                     elif selected == 3:
-                        start_game(vs_ai=False, load_game=False, network="join")
+                        start_game(vs_ai=False, load_saved_game=False, network="join")
                     elif selected == 4:
                         ai_level = (ai_level + 1) % len(ai_levels)
                     elif selected == 5:
