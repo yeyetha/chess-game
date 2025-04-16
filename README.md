@@ -1,1 +1,1 @@
-# chess-game
+Run file main.py
