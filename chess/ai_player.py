@@ -61,6 +61,6 @@ def ai_move(board, level="easy"):
         _, move = minimax(board, 2, float('-inf'), float('inf'), board.turn)
         return move
     elif level == "hard":
-        _, move = minimax(board, 3, float('-inf'), float('inf'), board.turn)
+        _, move = minimax(board, 4, float('-inf'), float('inf'), board.turn)
         return move
     return random.choice(list(board.legal_moves))

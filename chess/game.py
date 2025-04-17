@@ -126,6 +126,11 @@ def start_game(vs_ai=True, load_saved_game=False, network=False, ai_level="mediu
         if board.is_game_over() or connection_lost:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    if net:
+                        try:
+                            net.send_move("__DISCONNECT__")
+                        except:
+                            pass
                     running = False
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
@@ -165,12 +170,23 @@ def start_game(vs_ai=True, load_saved_game=False, network=False, ai_level="mediu
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                if net:
+                    try:
+                        net.send_move("__DISCONNECT__")
+                    except:
+                        pass
                 running = False
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     action = pause_menu(screen)
                     if action == "save_exit":
                         save_game(board)
+                        if net:
+                            try:
+                                net.send_move("__DISCONNECT__")  
+                            except:
+                                connection_lost = True
+                                status_message = "Disconnect!"
                         return
                     elif action == "restart":
                         board = chess.Board()
